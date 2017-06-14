@@ -22,7 +22,7 @@ import java.util.concurrent.locks.LockSupport;
  * This Clock implementation is similar to CachedClock. It is slightly faster at
  * the cost of some accuracy.
  */
-public final class CoarseCachedClock implements Clock {
+public final class CoarseCachedClock extends AbstractPreciseClock {
     private static volatile CoarseCachedClock instance;
     private static final Object INSTANCE_LOCK = new Object();
     // ignore IDE complaints; volatile long is fine

@@ -25,6 +25,7 @@ import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.categories.AsyncLoggers;
 import org.apache.logging.log4j.core.CoreLoggerContexts;
 import org.apache.logging.log4j.core.config.ConfigurationFactory;
+import org.apache.logging.log4j.core.util.AbstractPreciseClock;
 import org.apache.logging.log4j.core.util.Clock;
 import org.apache.logging.log4j.core.util.ClockFactory;
 import org.apache.logging.log4j.core.util.ClockFactoryTest;
@@ -85,7 +86,7 @@ public class AsyncLoggerTimestampMessageTest {
         assertTrue("line1 correct", line1.equals("123456789000 Async logger msg with embedded timestamp"));
     }
 
-    public static class PoisonClock implements Clock {
+    public static class PoisonClock extends AbstractPreciseClock {
         public static boolean called = false;
         @Override
         public long currentTimeMillis() {

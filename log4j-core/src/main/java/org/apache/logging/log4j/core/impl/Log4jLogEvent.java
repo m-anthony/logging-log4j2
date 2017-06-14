@@ -16,6 +16,9 @@
  */
 package org.apache.logging.log4j.core.impl;
 
+import static org.apache.logging.log4j.core.util.PreciseClock.NANOS_PER_MILLI;
+import static org.apache.logging.log4j.core.util.PreciseClock.NANOS_PER_SECOND;
+
 import java.io.IOException;
 import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
@@ -29,22 +32,22 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.Marker;
 import org.apache.logging.log4j.ThreadContext;
 import org.apache.logging.log4j.core.ContextDataInjector;
-import org.apache.logging.log4j.util.ReadOnlyStringMap;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.async.RingBufferLogEvent;
 import org.apache.logging.log4j.core.config.LoggerConfig;
 import org.apache.logging.log4j.core.config.Property;
-import org.apache.logging.log4j.core.util.Clock;
 import org.apache.logging.log4j.core.util.ClockFactory;
 import org.apache.logging.log4j.core.util.DummyNanoClock;
 import org.apache.logging.log4j.core.util.NanoClock;
+import org.apache.logging.log4j.core.util.PreciseClock;
 import org.apache.logging.log4j.message.LoggerNameAwareMessage;
 import org.apache.logging.log4j.message.Message;
 import org.apache.logging.log4j.message.ReusableMessage;
 import org.apache.logging.log4j.message.SimpleMessage;
 import org.apache.logging.log4j.message.TimestampMessage;
-import org.apache.logging.log4j.util.StringMap;
 import org.apache.logging.log4j.status.StatusLogger;
+import org.apache.logging.log4j.util.ReadOnlyStringMap;
+import org.apache.logging.log4j.util.StringMap;
 import org.apache.logging.log4j.util.Strings;
 
 /**
@@ -53,7 +56,7 @@ import org.apache.logging.log4j.util.Strings;
 public class Log4jLogEvent implements LogEvent {
 
     private static final long serialVersionUID = -8393305700508709443L;
-    private static final Clock CLOCK = ClockFactory.getClock();
+    private static final PreciseClock CLOCK = ClockFactory.getClock();
     private static volatile NanoClock nanoClock = new DummyNanoClock();
     private static final ContextDataInjector CONTEXT_DATA_INJECTOR = ContextDataInjectorFactory.createInjector();
 
@@ -62,7 +65,8 @@ public class Log4jLogEvent implements LogEvent {
     private final Level level;
     private final String loggerName;
     private Message message;
-    private final long timeMillis;
+    private final long timeSeconds;
+    private final int nanoOfSecond;
     private final transient Throwable thrown;
     private ThrowableProxy thrownProxy;
     private final StringMap contextData;
@@ -85,7 +89,8 @@ public class Log4jLogEvent implements LogEvent {
         private String loggerName;
         private Message message;
         private Throwable thrown;
-        private long timeMillis = CLOCK.currentTimeMillis();
+        private int nanoOfSecond;
+        private long timeSeconds;
         private ThrowableProxy thrownProxy;
         private StringMap contextData = createContextData((List<Property>) null);
         private ThreadContext.ContextStack contextStack = ThreadContext.getImmutableStack();
@@ -98,6 +103,21 @@ public class Log4jLogEvent implements LogEvent {
         private long nanoTime;
 
         public Builder() {
+            
+            long timeReference = CLOCK.getTimeReference();
+            long nanoAdjustment = CLOCK.getNanoTimeAdjustment(timeReference);
+            if(nanoAdjustment == -1L){
+                //get a better time reference and retry. Should not fail with a reasonable implementation 
+                //(i.e updateTimeReference return value is close to present time) 
+                timeReference = CLOCK.updateTimeReference();
+                nanoAdjustment = CLOCK.getNanoTimeAdjustment(timeReference);
+                if(nanoAdjustment == -1L) throw new AssertionError("Time reference " + timeReference + " is not in range");
+            }
+            //TODO: use Math.floorDiv() / floorMod() in Java 8, cf Instant.ofEpochSecond(long, long)
+            long secondAdjustment = nanoAdjustment / NANOS_PER_SECOND;
+            if(nanoAdjustment < 0L && nanoAdjustment * NANOS_PER_SECOND != secondAdjustment) secondAdjustment--;
+            this.timeSeconds = timeReference + secondAdjustment;
+            this.nanoOfSecond = (int) (nanoAdjustment - secondAdjustment * NANOS_PER_SECOND);
         }
 
         public Builder(final LogEvent other) {
@@ -115,7 +135,8 @@ public class Log4jLogEvent implements LogEvent {
             this.level = other.getLevel();
             this.loggerName = other.getLoggerName();
             this.message = other.getMessage();
-            this.timeMillis = other.getTimeMillis();
+            this.timeSeconds = other.getTimeSeconds();
+            this.nanoOfSecond = other.getNanoOfSecond();
             this.thrown = other.getThrown();
             this.contextStack = other.getContextStack();
             this.includeLocation = other.isIncludeLocation();
@@ -182,7 +203,18 @@ public class Log4jLogEvent implements LogEvent {
         }
 
         public Builder setTimeMillis(final long timeMillis) {
-            this.timeMillis = timeMillis;
+            this.timeSeconds = timeMillis / 1000;
+            this.nanoOfSecond = NANOS_PER_MILLI * (int) (timeMillis % 1000); 
+            return this;
+        }
+        
+        public Builder setTimeSeconds(final long timeSeconds) {
+            this.timeSeconds = timeSeconds;
+            return this;
+        }
+        
+        public Builder setNanoOfSecond(final int nanoOfSecond) {
+            this.nanoOfSecond = nanoOfSecond;
             return this;
         }
 
@@ -256,8 +288,8 @@ public class Log4jLogEvent implements LogEvent {
         @Override
         public Log4jLogEvent build() {
             final Log4jLogEvent result = new Log4jLogEvent(loggerName, marker, loggerFqcn, level, message, thrown,
-                    thrownProxy, contextData, contextStack, threadId, threadName, threadPriority, source, timeMillis,
-                    nanoTime);
+                    thrownProxy, contextData, contextStack, threadId, threadName, threadPriority, source, timeSeconds,
+                    nanoOfSecond, nanoTime);
             result.setIncludeLocation(includeLocation);
             result.setEndOfBatch(endOfBatch);
             return result;
@@ -273,8 +305,9 @@ public class Log4jLogEvent implements LogEvent {
     }
 
     public Log4jLogEvent() {
+        //CLOCK will compute precise timestamp
         this(Strings.EMPTY, null, Strings.EMPTY, null, null, (Throwable) null, null, null, null, 0, null,
-                0, null, CLOCK.currentTimeMillis(), nanoClock.nanoTime());
+                0, null, Long.MIN_VALUE, 0, nanoClock.nanoTime());
     }
 
     /**
@@ -284,7 +317,7 @@ public class Log4jLogEvent implements LogEvent {
    @Deprecated
    public Log4jLogEvent(final long timestamp) {
        this(Strings.EMPTY, null, Strings.EMPTY, null, null, (Throwable) null, null, null, null, 0, null,
-               0, null, timestamp, nanoClock.nanoTime());
+               0, null, timestamp / 1000, NANOS_PER_MILLI * (int) (timestamp % 1000), nanoClock.nanoTime());
    }
 
    /**
@@ -323,8 +356,7 @@ public class Log4jLogEvent implements LogEvent {
            0,
            null, // LOG4J2-628 use log4j.Clock for timestamps
            // LOG4J2-744 unless TimestampMessage already has one
-           message instanceof TimestampMessage ? ((TimestampMessage) message).getTimestamp() :
-               CLOCK.currentTimeMillis(), nanoClock.nanoTime());
+           Long.MIN_VALUE, 0, nanoClock.nanoTime());
    }
 
    /**
@@ -348,7 +380,7 @@ public class Log4jLogEvent implements LogEvent {
                         final ThreadContext.ContextStack ndc, final String threadName,
                         final StackTraceElement location, final long timestampMillis) {
        this(loggerName, marker, loggerFQCN, level, message, t, null, createContextData(mdc), ndc, 0,
-               threadName, 0, location, timestampMillis, nanoClock.nanoTime());
+               threadName, 0, location, timestampMillis / 1000, 1_000_000 * (int) (timestampMillis % 1000), nanoClock.nanoTime());
    }
 
    /**
@@ -376,7 +408,8 @@ public class Log4jLogEvent implements LogEvent {
                                             final String threadName, final StackTraceElement location,
                                             final long timestamp) {
         final Log4jLogEvent result = new Log4jLogEvent(loggerName, marker, loggerFQCN, level, message, thrown,
-                thrownProxy, createContextData(mdc), ndc, 0, threadName, 0, location, timestamp, nanoClock.nanoTime());
+                thrownProxy, createContextData(mdc), ndc, 0, threadName, 0, location, timestamp / 1000, 
+                1_000_000 * ((int) timestamp % 1000), nanoClock.nanoTime());
         return result;
     }
 
@@ -395,7 +428,8 @@ public class Log4jLogEvent implements LogEvent {
      * @param threadName The name of the thread.
      * @param threadPriority the thread priority
      * @param source The locations of the caller.
-     * @param timestampMillis The timestamp of the event.
+     * @param timeSeconds The time stamp of the event (seconds since epoch), using Long.MIN_VALUE will recompute it (as well as nanoOfSecond) based on CLOCK current time 
+     * @param nanoOfSeconds The sub-second part of the time stamp.
      * @param nanoTime The value of the running Java Virtual Machine's high-resolution time source when the event was
      *          created.
      */
@@ -403,7 +437,7 @@ public class Log4jLogEvent implements LogEvent {
             final Message message, final Throwable thrown, final ThrowableProxy thrownProxy,
             final StringMap contextData, final ThreadContext.ContextStack contextStack, final long threadId,
             final String threadName, final int threadPriority, final StackTraceElement source,
-            final long timestampMillis, final long nanoTime) {
+            final long timeSeconds, final int nanoOfSeconds, final long nanoTime) {
         this.loggerName = loggerName;
         this.marker = marker;
         this.loggerFqcn = loggerFQCN;
@@ -413,9 +447,29 @@ public class Log4jLogEvent implements LogEvent {
         this.thrownProxy = thrownProxy;
         this.contextData = contextData == null ? ContextDataFactory.createContextData() : contextData;
         this.contextStack = contextStack == null ? ThreadContext.EMPTY_STACK : contextStack;
-        this.timeMillis = message instanceof TimestampMessage
-                ? ((TimestampMessage) message).getTimestamp()
-                : timestampMillis;
+        if(message instanceof TimestampMessage){
+            long millis = ((TimestampMessage) message).getTimestamp();
+            this.timeSeconds = millis / 1000;
+            this.nanoOfSecond = (int) (NANOS_PER_MILLI * (millis % 1000));
+        } else if(timeSeconds != Long.MIN_VALUE){
+            this.timeSeconds = timeSeconds;
+            this.nanoOfSecond = nanoOfSeconds;
+        } else {
+            long timeReference = CLOCK.getTimeReference();
+            long nanoAdjustment = CLOCK.getNanoTimeAdjustment(timeReference);
+            if(nanoAdjustment == -1L){
+                //get a better time reference and retry. Should not fail with a reasonable implementation 
+                //(i.e updateTimeReference return value is close to present time) 
+                timeReference = CLOCK.updateTimeReference();
+                nanoAdjustment = CLOCK.getNanoTimeAdjustment(timeReference);
+                if(nanoAdjustment == -1L) throw new AssertionError("Time reference " + timeReference + " is not in range");
+            }
+            //TODO: use Math.floorDiv() / floorMod() in Java 8, cf Instant.ofEpochSecond(long, long)
+            long secondAdjustment = nanoAdjustment / NANOS_PER_SECOND;
+            if(nanoAdjustment < 0L && nanoAdjustment * NANOS_PER_SECOND != secondAdjustment) secondAdjustment--;
+            this.timeSeconds = timeReference + secondAdjustment;
+            this.nanoOfSecond = (int) (nanoAdjustment - secondAdjustment * NANOS_PER_SECOND);
+        }
         this.threadId = threadId;
         this.threadName = threadName;
         this.threadPriority = threadPriority;
@@ -542,7 +596,19 @@ public class Log4jLogEvent implements LogEvent {
      */
     @Override
     public long getTimeMillis() {
-        return timeMillis;
+        return timeSeconds * 1000 + nanoOfSecond / 1_000_000;
+    }
+
+    
+    @Override
+    public long getTimeSeconds() {
+        return timeSeconds;
+    }
+
+    @Override
+    public int getNanoOfSecond() {
+        // TODO Auto-generated method stub
+        return nanoOfSecond;
     }
 
     /**
@@ -722,7 +788,7 @@ public class Log4jLogEvent implements LogEvent {
             final Log4jLogEvent result = new Log4jLogEvent(proxy.loggerName, proxy.marker,
                     proxy.loggerFQCN, proxy.level, proxy.message,
                     proxy.thrown, proxy.thrownProxy, proxy.contextData, proxy.contextStack, proxy.threadId,
-                    proxy.threadName, proxy.threadPriority, proxy.source, proxy.timeMillis, proxy.nanoTime);
+                    proxy.threadName, proxy.threadPriority, proxy.source, proxy.timeSeconds, proxy.nanoOfSecond, proxy.nanoTime);
             result.setEndOfBatch(proxy.isEndOfBatch);
             result.setIncludeLocation(proxy.isLocationRequired);
             return result;
@@ -774,7 +840,10 @@ public class Log4jLogEvent implements LogEvent {
         if (includeLocation != that.includeLocation) {
             return false;
         }
-        if (timeMillis != that.timeMillis) {
+        if (timeSeconds != that.timeSeconds) {
+            return false;
+        }
+        if (nanoOfSecond != that.nanoOfSecond) {
             return false;
         }
         if (nanoTime != that.nanoTime) {
@@ -831,7 +900,8 @@ public class Log4jLogEvent implements LogEvent {
         result = 31 * result + (level != null ? level.hashCode() : 0);
         result = 31 * result + loggerName.hashCode();
         result = 31 * result + message.hashCode();
-        result = 31 * result + (int) (timeMillis ^ (timeMillis >>> 32));
+        result = 31 * result + (int) (timeSeconds ^ (timeSeconds >>> 32));
+        result = 31 * result + nanoOfSecond;
         result = 31 * result + (int) (nanoTime ^ (nanoTime >>> 32));
         result = 31 * result + (thrown != null ? thrown.hashCode() : 0);
         result = 31 * result + (thrownProxy != null ? thrownProxy.hashCode() : 0);
@@ -863,7 +933,8 @@ public class Log4jLogEvent implements LogEvent {
         private MarshalledObject<Message> marshalledMessage;
         /** since 2.8 */
         private String messageString;
-        private final long timeMillis;
+        private final long timeSeconds;
+        private final int nanoOfSecond;
         private final transient Throwable thrown;
         private final ThrowableProxy thrownProxy;
         /** @since 2.7 */
@@ -888,7 +959,8 @@ public class Log4jLogEvent implements LogEvent {
             this.message = event.message instanceof ReusableMessage
                     ? memento((ReusableMessage) event.message)
                     : event.message;
-            this.timeMillis = event.timeMillis;
+            this.timeSeconds = event.getTimeSeconds();
+            this.nanoOfSecond = event.getNanoOfSecond();
             this.thrown = event.thrown;
             this.thrownProxy = event.thrownProxy;
             this.contextData = event.contextData;
@@ -912,7 +984,8 @@ public class Log4jLogEvent implements LogEvent {
             message = temp instanceof ReusableMessage
                     ? memento((ReusableMessage) temp)
                     : temp;
-            this.timeMillis = event.getTimeMillis();
+            this.timeSeconds = event.getTimeSeconds();
+            this.nanoOfSecond = event.getNanoOfSecond();
             this.thrown = event.getThrown();
             this.thrownProxy = event.getThrownProxy();
             this.contextData = memento(event.getContextData());
@@ -956,7 +1029,7 @@ public class Log4jLogEvent implements LogEvent {
          */
         protected Object readResolve() {
             final Log4jLogEvent result = new Log4jLogEvent(loggerName, marker, loggerFQCN, level, message(), thrown,
-                    thrownProxy, contextData, contextStack, threadId, threadName, threadPriority, source, timeMillis,
+                    thrownProxy, contextData, contextStack, threadId, threadName, threadPriority, source, timeSeconds, nanoOfSecond,
                     nanoTime);
             result.setEndOfBatch(isEndOfBatch);
             result.setIncludeLocation(isLocationRequired);

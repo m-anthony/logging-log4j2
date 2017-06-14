@@ -16,31 +16,33 @@
  */
 package org.apache.logging.log4j.core.async;
 
+import static org.apache.logging.log4j.core.util.PreciseClock.NANOS_PER_SECOND;
+
 import java.util.List;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.Marker;
 import org.apache.logging.log4j.ThreadContext;
 import org.apache.logging.log4j.ThreadContext.ContextStack;
+import org.apache.logging.log4j.core.ContextDataInjector;
 import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.config.Configuration;
 import org.apache.logging.log4j.core.config.Property;
 import org.apache.logging.log4j.core.config.ReliabilityStrategy;
 import org.apache.logging.log4j.core.impl.ContextDataFactory;
-import org.apache.logging.log4j.core.ContextDataInjector;
 import org.apache.logging.log4j.core.impl.ContextDataInjectorFactory;
 import org.apache.logging.log4j.core.impl.Log4jLogEvent;
-import org.apache.logging.log4j.core.util.Clock;
 import org.apache.logging.log4j.core.util.ClockFactory;
 import org.apache.logging.log4j.core.util.Constants;
 import org.apache.logging.log4j.core.util.NanoClock;
+import org.apache.logging.log4j.core.util.PreciseClock;
 import org.apache.logging.log4j.message.AsynchronouslyFormattable;
 import org.apache.logging.log4j.message.Message;
 import org.apache.logging.log4j.message.MessageFactory;
 import org.apache.logging.log4j.message.ReusableMessage;
-import org.apache.logging.log4j.util.StringMap;
 import org.apache.logging.log4j.status.StatusLogger;
+import org.apache.logging.log4j.util.StringMap;
 
 import com.lmax.disruptor.EventTranslatorVararg;
 import com.lmax.disruptor.dsl.Disruptor;
@@ -71,7 +73,7 @@ public class AsyncLogger extends Logger implements EventTranslatorVararg<RingBuf
     // immediate inlining instead of waiting until they are designated "hot enough".
 
     private static final StatusLogger LOGGER = StatusLogger.getLogger();
-    private static final Clock CLOCK = ClockFactory.getClock(); // not reconfigurable
+    private static final PreciseClock CLOCK = ClockFactory.getClock(); // not reconfigurable
     private static final ContextDataInjector CONTEXT_DATA_INJECTOR = ContextDataInjectorFactory.createInjector();
 
     private static final ThreadNameCachingStrategy THREAD_NAME_CACHING_STRATEGY = ThreadNameCachingStrategy.create();
@@ -188,6 +190,19 @@ public class AsyncLogger extends Logger implements EventTranslatorVararg<RingBuf
     private void initTranslator(final RingBufferLogEventTranslator translator, final String fqcn,
             final Level level, final Marker marker, final Message message, final Throwable thrown) {
 
+        long timeReference = CLOCK.getTimeReference();
+        long nanoAdjustment = CLOCK.getNanoTimeAdjustment(timeReference);
+        if(nanoAdjustment == -1L){
+            //get a better time reference and retry. Should not fail with a reasonable implementation 
+            //(i.e updateTimeReference return value is close to present time) 
+            timeReference = CLOCK.updateTimeReference();
+            nanoAdjustment = CLOCK.getNanoTimeAdjustment(timeReference);
+            if(nanoAdjustment == -1L) throw new AssertionError("Time reference " + timeReference + " is not in range");
+        }
+        //TODO: use Math.floorDiv() / floorMod() in Java 8, cf Instant.ofEpochSecond(long, long)
+        long secondAdjustment = nanoAdjustment / NANOS_PER_SECOND;
+        if(nanoAdjustment < 0L && nanoAdjustment * NANOS_PER_SECOND != secondAdjustment) secondAdjustment--;
+
         translator.setBasicValues(this, name, marker, fqcn, level, message, //
                 // don't construct ThrowableProxy until required
                 thrown,
@@ -197,7 +212,8 @@ public class AsyncLogger extends Logger implements EventTranslatorVararg<RingBuf
 
                 // location (expensive to calculate)
                 calcLocationIfRequested(fqcn), //
-                CLOCK.currentTimeMillis(), //
+                timeReference + secondAdjustment, // timeSeconds
+                (int) (nanoAdjustment - secondAdjustment * NANOS_PER_SECOND), // nanoOfSecond
                 nanoClock.nanoTime() //
         );
     }
@@ -278,12 +294,29 @@ public class AsyncLogger extends Logger implements EventTranslatorVararg<RingBuf
 
         final Thread currentThread = Thread.currentThread();
         final String threadName = THREAD_NAME_CACHING_STRATEGY.getThreadName();
+        
+        long timeReference = CLOCK.getTimeReference();
+        long nanoAdjustment = CLOCK.getNanoTimeAdjustment(timeReference);
+        if(nanoAdjustment == -1L){
+            //get a better time reference and retry. Should not fail with a reasonable implementation 
+            //(i.e updateTimeReference return value is close to present time) 
+            timeReference = CLOCK.updateTimeReference();
+            nanoAdjustment = CLOCK.getNanoTimeAdjustment(timeReference);
+            if(nanoAdjustment == -1L) throw new AssertionError("Time reference " + timeReference + " is not in range");
+        }
+        //TODO: use Math.floorDiv() / floorMod() in Java 8, cf Instant.ofEpochSecond(long, long)
+        long secondAdjustment = nanoAdjustment / NANOS_PER_SECOND;
+        if(nanoAdjustment < 0L && nanoAdjustment * NANOS_PER_SECOND != secondAdjustment) secondAdjustment--;
+
+        
         event.setValues(asyncLogger, asyncLogger.getName(), marker, fqcn, level, message, thrown,
                 // config properties are taken care of in the EventHandler thread
                 // in the AsyncLogger#actualAsyncLog method
                 CONTEXT_DATA_INJECTOR.injectContextData(null, (StringMap) event.getContextData()),
                 contextStack, currentThread.getId(), threadName, currentThread.getPriority(), location,
-                CLOCK.currentTimeMillis(), nanoClock.nanoTime());
+                timeReference + secondAdjustment, // timeSeconds
+                (int) (nanoAdjustment - secondAdjustment * NANOS_PER_SECOND), // nanoOfSecond
+                nanoClock.nanoTime());
     }
 
     /**

@@ -58,11 +58,11 @@ public final class ClockFactory {
      *
      * @return a {@code Clock} instance
      */
-    public static Clock getClock() {
+    public static PreciseClock getClock() {
         return createClock();
     }
 
-    private static Clock createClock() {
+    private static PreciseClock createClock() {
         final String userRequest = PropertiesUtil.getProperties().getStringProperty(PROPERTY_NAME);
         if (userRequest == null || "SystemClock".equals(userRequest)) {
             LOGGER.trace("Using default SystemClock for timestamps.");
@@ -81,7 +81,7 @@ public final class ClockFactory {
         try {
             final Clock result = Loader.newCheckedInstanceOf(userRequest, Clock.class);
             LOGGER.trace("Using {} for timestamps.", result.getClass().getName());
-            return result;
+            return result instanceof PreciseClock ? (PreciseClock) result : new LegacyClockWrapper(result);
         } catch (final Exception e) {
             final String fmt = "Could not create {}: {}, using default SystemClock for timestamps.";
             LOGGER.error(fmt, userRequest, e);

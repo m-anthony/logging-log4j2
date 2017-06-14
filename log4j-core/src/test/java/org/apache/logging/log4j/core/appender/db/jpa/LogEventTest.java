@@ -110,6 +110,17 @@ public class LogEventTest {
             public long getTimeMillis() {
                 return 0;
             }
+
+            @Override
+            public long getTimeSeconds() {
+                return 0;
+            }
+
+            @Override
+            public int getNanoOfSecond() {
+                return 0;
+            }
+            
         };
         Assert.assertNotSame(logEvent, logEvent.toImmutable());
     }

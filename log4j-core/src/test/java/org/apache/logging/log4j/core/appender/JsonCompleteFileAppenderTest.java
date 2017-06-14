@@ -74,6 +74,7 @@ public class JsonCompleteFileAppenderTest {
         String line4;
         String line5;
         String line6;
+        String line7;
         try (final BufferedReader reader = new BufferedReader(new FileReader(this.logFile))) {
             line1 = reader.readLine();
             line2 = reader.readLine();
@@ -81,6 +82,7 @@ public class JsonCompleteFileAppenderTest {
             line4 = reader.readLine();
             line5 = reader.readLine();
             line6 = reader.readLine();
+            line7 = reader.readLine();
         }
         assertNotNull("line1", line1);
         final String msg1 = "[";
@@ -91,20 +93,24 @@ public class JsonCompleteFileAppenderTest {
         assertTrue("line2 incorrect: [" + line2 + "], does not contain: [" + msg2 + ']', line2.equals(msg2));
 
         assertNotNull("line3", line3);
-        final String msg3 = "  \"timeMillis\" : ";
+        final String msg3 = "  \"timeSeconds\" : ";
         assertTrue("line3 incorrect: [" + line3 + "], does not contain: [" + msg3 + ']', line3.contains(msg3));
-
+        
         assertNotNull("line4", line4);
-        final String msg4 = "  \"thread\" : \"main\",";
-        assertTrue("line4 incorrect: [" + line4 + "], does not contain: [" + msg4 + ']', line4.contains(msg4));
+        final String msg4 = "  \"nanoOfSecond\" : ";
+        assertTrue("line4 incorrect: [" + line4 + "], does not contain: [" + msg3 + ']', line4.contains(msg4));
 
         assertNotNull("line5", line5);
-        final String msg5 = "  \"level\" : \"INFO\",";
+        final String msg5 = "  \"thread\" : \"main\",";
         assertTrue("line5 incorrect: [" + line5 + "], does not contain: [" + msg5 + ']', line5.contains(msg5));
 
         assertNotNull("line6", line6);
-        final String msg6 = "  \"loggerName\" : \"com.foo.Bar\",";
-        assertTrue("line5 incorrect: [" + line6 + "], does not contain: [" + msg6 + ']', line6.contains(msg6));
+        final String msg6 = "  \"level\" : \"INFO\",";
+        assertTrue("line6 incorrect: [" + line6 + "], does not contain: [" + msg6 + ']', line6.contains(msg6));
+
+        assertNotNull("line7", line7);
+        final String msg7 = "  \"loggerName\" : \"com.foo.Bar\",";
+        assertTrue("line7 incorrect: [" + line7 + "], does not contain: [" + msg7 + ']', line7.contains(msg7));
 
         final String location = "testFlushAtEndOfBatch";
         assertTrue("no location", !line1.contains(location));

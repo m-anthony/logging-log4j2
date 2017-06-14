@@ -131,6 +131,20 @@ public interface LogEvent extends Serializable {
      * @see java.lang.System#currentTimeMillis()
      */
     long getTimeMillis();
+    
+    /**
+     * Gets event time in second since midnight, January 1, 1970 UTC.
+     *
+     * @return seconds since midnight, January 1, 1970 UTC.
+     */
+    long getTimeSeconds();
+
+    /**
+     * Gets the number of nanoseconds of the event time from the start of the second returned by {@code getTimeSecond}.
+     *
+     * @return the nanoseconds within the second, always positive, never exceeds 999,999,999
+     */
+    int getNanoOfSecond();
 
     /**
      * Gets the source of logging request.

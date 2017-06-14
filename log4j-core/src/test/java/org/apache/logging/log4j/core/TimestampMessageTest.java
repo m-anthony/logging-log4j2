@@ -19,6 +19,7 @@ package org.apache.logging.log4j.core;
 import java.util.List;
 
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.util.AbstractPreciseClock;
 import org.apache.logging.log4j.core.util.Clock;
 import org.apache.logging.log4j.core.util.ClockFactory;
 import org.apache.logging.log4j.core.util.ClockFactoryTest;
@@ -76,7 +77,7 @@ public class TimestampMessageTest {
         assertEquals("123456789000 Message with embedded timestamp" + NL, msgs.get(0));
     }
 
-    public static class PoisonClock implements Clock {
+    public static class PoisonClock extends AbstractPreciseClock {
         public PoisonClock() {
             super();
             // Breakpoint here for debuging.
@@ -84,6 +85,16 @@ public class TimestampMessageTest {
 
         @Override
         public long currentTimeMillis() {
+            if(getTimeReference() == 0){
+                //called by updateTimeReference at construction time => OK
+                return 1L;
+            } else {
+                throw new RuntimeException("This should not have been called");
+            }
+        }
+
+        @Override
+        public long getNanoTimeAdjustment(long timeReference) {
             throw new RuntimeException("This should not have been called");
         }
     }

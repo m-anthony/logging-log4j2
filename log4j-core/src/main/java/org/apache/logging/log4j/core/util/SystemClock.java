@@ -19,7 +19,7 @@ package org.apache.logging.log4j.core.util;
 /**
  * Implementation of the {@code Clock} interface that returns the system time.
  */
-public final class SystemClock implements Clock {
+public final class SystemClock extends AbstractPreciseClock {
 
     /**
      * Returns the system time.

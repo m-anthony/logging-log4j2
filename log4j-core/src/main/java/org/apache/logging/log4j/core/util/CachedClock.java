@@ -26,7 +26,7 @@ import java.util.concurrent.locks.LockSupport;
  * problem, this class also updates the internal time value every 1024 calls to
  * {@code currentTimeMillis()}.
  */
-public final class CachedClock implements Clock {
+public final class CachedClock extends AbstractPreciseClock {
     private static final int UPDATE_THRESHOLD = 1000;
     private static volatile CachedClock instance;
     private static final Object INSTANCE_LOCK = new Object();

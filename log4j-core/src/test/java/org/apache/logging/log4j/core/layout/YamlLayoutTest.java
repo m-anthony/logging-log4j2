@@ -132,7 +132,8 @@ public class YamlLayoutTest {
         //
         assertNull(actual.getThrown());
         // make sure the names we want are used
-        this.checkPropertyName("timeMillis", compact, str, true);
+        this.checkPropertyName("timeSeconds", compact, str, true);
+        this.checkPropertyName("nanoOfSecond", compact, str, true);
         this.checkPropertyName("thread", compact, str, true); // and not threadName
         this.checkPropertyName("level", compact, str, true);
         this.checkPropertyName("loggerName", compact, str, true);

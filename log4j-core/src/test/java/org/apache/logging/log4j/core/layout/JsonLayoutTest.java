@@ -151,7 +151,8 @@ public class JsonLayoutTest {
         //
         assertNull(actual.getThrown());
         // make sure the names we want are used
-        this.checkPropertyName("timeMillis", compact, str);
+        this.checkPropertyName("timeSeconds", compact, str);
+        this.checkPropertyName("nanoOfSecond", compact, str);
         this.checkPropertyName("thread", compact, str); // and not threadName
         this.checkPropertyName("level", compact, str);
         this.checkPropertyName("loggerName", compact, str);

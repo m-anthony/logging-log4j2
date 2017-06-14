@@ -16,6 +16,9 @@
  */
 package org.apache.logging.log4j.core.impl;
 
+import static org.apache.logging.log4j.core.util.PreciseClock.NANOS_PER_MILLI;
+import static org.apache.logging.log4j.core.util.PreciseClock.NANOS_PER_SECOND;
+
 import java.util.List;
 
 import org.apache.logging.log4j.Level;
@@ -25,8 +28,8 @@ import org.apache.logging.log4j.core.ContextDataInjector;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.async.ThreadNameCachingStrategy;
 import org.apache.logging.log4j.core.config.Property;
-import org.apache.logging.log4j.core.util.Clock;
 import org.apache.logging.log4j.core.util.ClockFactory;
+import org.apache.logging.log4j.core.util.PreciseClock;
 import org.apache.logging.log4j.message.Message;
 import org.apache.logging.log4j.message.TimestampMessage;
 import org.apache.logging.log4j.util.StringMap;
@@ -37,7 +40,7 @@ import org.apache.logging.log4j.util.StringMap;
  */
 public class ReusableLogEventFactory implements LogEventFactory {
     private static final ThreadNameCachingStrategy THREAD_NAME_CACHING_STRATEGY = ThreadNameCachingStrategy.create();
-    private static final Clock CLOCK = ClockFactory.getClock();
+    private static final PreciseClock CLOCK = ClockFactory.getClock();
 
     private static ThreadLocal<MutableLogEvent> mutableLogEventThreadLocal = new ThreadLocal<>();
     private final ContextDataInjector injector = ContextDataInjectorFactory.createInjector();
@@ -82,9 +85,27 @@ public class ReusableLogEventFactory implements LogEventFactory {
         result.setThrown(t);
         result.setContextData(injector.injectContextData(properties, (StringMap) result.getContextData()));
         result.setContextStack(ThreadContext.getDepth() == 0 ? ThreadContext.EMPTY_STACK : ThreadContext.cloneStack());// mutable copy
-        result.setTimeMillis(message instanceof TimestampMessage
-                ? ((TimestampMessage) message).getTimestamp()
-                : CLOCK.currentTimeMillis());
+        
+        if(message instanceof TimestampMessage){
+            long millis = ((TimestampMessage) message).getTimestamp();
+            result.setTimeSeconds(millis / 1000);
+            result.setNanoOfSecond((int) (NANOS_PER_MILLI * (millis % 1000)));
+        } else {
+            long timeReference = CLOCK.getTimeReference();
+            long nanoAdjustment = CLOCK.getNanoTimeAdjustment(timeReference);
+            if(nanoAdjustment == -1L){
+                //get a better time reference and retry. Should not fail with a reasonable implementation 
+                //(i.e updateTimeReference return value is close to present time) 
+                timeReference = CLOCK.updateTimeReference();
+                nanoAdjustment = CLOCK.getNanoTimeAdjustment(timeReference);
+                if(nanoAdjustment == -1L) throw new AssertionError("Time reference " + timeReference + " is not in range");
+            }
+            //TODO: use Math.floorDiv() / floorMod() in Java 8, cf Instant.ofEpochSecond(long, long)
+            long secondAdjustment = nanoAdjustment / NANOS_PER_SECOND;
+            if(nanoAdjustment < 0L && nanoAdjustment * NANOS_PER_SECOND != secondAdjustment) secondAdjustment--;
+            result.setTimeSeconds(timeReference + secondAdjustment);
+            result.setNanoOfSecond((int) (nanoAdjustment - secondAdjustment * NANOS_PER_SECOND));
+        }
         result.setNanoTime(Log4jLogEvent.getNanoClock().nanoTime());
 
         if (THREAD_NAME_CACHING_STRATEGY == ThreadNameCachingStrategy.UNCACHED) {

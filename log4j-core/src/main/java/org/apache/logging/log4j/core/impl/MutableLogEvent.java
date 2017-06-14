@@ -16,6 +16,8 @@
  */
 package org.apache.logging.log4j.core.impl;
 
+import static org.apache.logging.log4j.core.util.PreciseClock.NANOS_PER_MILLI;
+
 import java.io.InvalidObjectException;
 import java.io.ObjectInputStream;
 import java.util.Arrays;
@@ -24,14 +26,14 @@ import java.util.Map;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.Marker;
 import org.apache.logging.log4j.ThreadContext;
-import org.apache.logging.log4j.message.AsynchronouslyFormattable;
-import org.apache.logging.log4j.util.ReadOnlyStringMap;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.util.Constants;
+import org.apache.logging.log4j.message.AsynchronouslyFormattable;
 import org.apache.logging.log4j.message.Message;
 import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.apache.logging.log4j.message.ReusableMessage;
 import org.apache.logging.log4j.message.SimpleMessage;
+import org.apache.logging.log4j.util.ReadOnlyStringMap;
 import org.apache.logging.log4j.util.StringBuilders;
 import org.apache.logging.log4j.util.StringMap;
 import org.apache.logging.log4j.util.Strings;
@@ -45,7 +47,8 @@ public class MutableLogEvent implements LogEvent, ReusableMessage {
 
     private int threadPriority;
     private long threadId;
-    private long timeMillis;
+    private long timeSeconds;
+    private int nanoOfSecond;
     private long nanoTime;
     private short parameterCount;
     private boolean includeLocation;
@@ -93,7 +96,8 @@ public class MutableLogEvent implements LogEvent, ReusableMessage {
         this.marker = event.getMarker();
         this.level = event.getLevel();
         this.loggerName = event.getLoggerName();
-        this.timeMillis = event.getTimeMillis();
+        this.timeSeconds = event.getTimeSeconds();
+        this.nanoOfSecond = event.getNanoOfSecond();
         this.thrown = event.getThrown();
         this.thrownProxy = event.getThrownProxy();
 
@@ -316,11 +320,30 @@ public class MutableLogEvent implements LogEvent, ReusableMessage {
 
     @Override
     public long getTimeMillis() {
-        return timeMillis;
+        return timeSeconds * 1000 + nanoOfSecond / NANOS_PER_MILLI;
     }
 
     public void setTimeMillis(final long timeMillis) {
-        this.timeMillis = timeMillis;
+        setTimeSeconds(timeMillis / 1000);
+        setNanoOfSecond((int) (timeMillis % 1000) * NANOS_PER_MILLI);
+    }
+
+    public void setTimeSeconds(final long timeSeconds) {
+        this.timeSeconds = timeSeconds;
+    }
+    
+    public void setNanoOfSecond(final int nanoOfSecond) {
+        this.nanoOfSecond = nanoOfSecond;
+    }
+
+    @Override
+    public long getTimeSeconds() {
+        return timeSeconds;
+    }
+
+    @Override
+    public int getNanoOfSecond() {
+        return nanoOfSecond;
     }
 
     /**
@@ -475,7 +498,8 @@ public class MutableLogEvent implements LogEvent, ReusableMessage {
                 .setThreadPriority(threadPriority) //
                 .setThrown(getThrown()) // may deserialize from thrownProxy
                 .setThrownProxy(thrownProxy) // avoid unnecessarily creating thrownProxy
-                .setTimeMillis(timeMillis);
+                .setTimeSeconds(timeSeconds)
+                .setNanoOfSecond(nanoOfSecond);
     }
 
     private Message getNonNullImmutableMessage() {

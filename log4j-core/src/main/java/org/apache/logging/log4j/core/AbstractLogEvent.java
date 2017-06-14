@@ -120,6 +120,17 @@ public abstract class AbstractLogEvent implements LogEvent {
     public long getTimeMillis() {
         return 0;
     }
+    
+
+    @Override
+    public long getTimeSeconds() {
+        return 0;
+    }
+
+    @Override
+    public int getNanoOfSecond() {
+        return 0;
+    }
 
     @Override
     public boolean isEndOfBatch() {

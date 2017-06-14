@@ -87,7 +87,7 @@ public class ClockFactoryTest {
         assertSame(CoarseCachedClock.class, ClockFactory.getClock().getClass());
     }
 
-    public static class MyClock implements Clock {
+    public static class MyClock extends AbstractPreciseClock {
         @Override
         public long currentTimeMillis() {
             return 42;

@@ -16,6 +16,8 @@
  */
 package org.apache.logging.log4j.core.appender.db.jpa;
 
+import static org.apache.logging.log4j.core.util.PreciseClock.NANOS_PER_MILLI;
+
 import java.util.Map;
 import javax.persistence.Basic;
 import javax.persistence.Convert;
@@ -34,6 +36,7 @@ import org.apache.logging.log4j.core.appender.db.jpa.converter.MessageAttributeC
 import org.apache.logging.log4j.core.appender.db.jpa.converter.StackTraceElementAttributeConverter;
 import org.apache.logging.log4j.core.appender.db.jpa.converter.ThrowableAttributeConverter;
 import org.apache.logging.log4j.core.impl.ThrowableProxy;
+import org.apache.logging.log4j.core.util.PreciseClock;
 import org.apache.logging.log4j.message.Message;
 
 /**
@@ -187,6 +190,18 @@ public abstract class BasicLogEventEntity extends AbstractLogEventWrapperEntity 
     @Basic
     public long getTimeMillis() {
         return this.getWrappedEvent().getTimeMillis();
+    }
+    
+    
+
+    @Override
+    public long getTimeSeconds() {
+        return getTimeMillis() / 1000;
+    }
+
+    @Override
+    public int getNanoOfSecond() {
+        return (int) (getTimeMillis() % 1000) * NANOS_PER_MILLI;
     }
 
     /**

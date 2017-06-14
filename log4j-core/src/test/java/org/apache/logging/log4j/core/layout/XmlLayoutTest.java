@@ -156,7 +156,8 @@ public class XmlLayoutTest {
         }
         //
         // make sure the names we want are used
-        this.checkAttributeName("timeMillis", compact, str);
+        this.checkAttributeName("timeSeconds", compact, str);
+        this.checkAttributeName("nanoOfSecond", compact, str);
         this.checkAttributeName("thread", compact, str); // and not threadName
         this.checkAttributeName("level", compact, str);
         this.checkAttributeName("loggerName", compact, str);

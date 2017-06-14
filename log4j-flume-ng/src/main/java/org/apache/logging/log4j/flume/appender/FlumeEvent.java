@@ -282,12 +282,30 @@ public class FlumeEvent extends SimpleEvent implements LogEvent {
     }
 
     /**
-     * Returns the event timestamp.
-     * @return the event timestamp.
+     * Returns the event timestamp in milliseconds.
+     * @return the event timestamp in milliseconds.
      */
     @Override
     public long getTimeMillis() {
         return event.getTimeMillis();
+    }
+    
+    
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public long getTimeSeconds() {
+        return event.getTimeSeconds();
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public int getNanoOfSecond() {
+        return event.getNanoOfSecond();
     }
 
     /**

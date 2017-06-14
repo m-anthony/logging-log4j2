@@ -16,6 +16,8 @@
  */
 package org.apache.logging.log4j.core.async;
 
+import static org.apache.logging.log4j.core.util.PreciseClock.NANOS_PER_MILLI;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Map;
@@ -28,6 +30,7 @@ import org.apache.logging.log4j.core.impl.ContextDataFactory;
 import org.apache.logging.log4j.core.impl.Log4jLogEvent;
 import org.apache.logging.log4j.core.impl.ThrowableProxy;
 import org.apache.logging.log4j.core.util.Constants;
+import org.apache.logging.log4j.core.util.PreciseClock;
 import org.apache.logging.log4j.message.AsynchronouslyFormattable;
 import org.apache.logging.log4j.message.Message;
 import org.apache.logging.log4j.message.ParameterizedMessage;
@@ -71,7 +74,8 @@ public class RingBufferLogEvent implements LogEvent, ReusableMessage, CharSequen
 
     private int threadPriority;
     private long threadId;
-    private long currentTimeMillis;
+    private long timeSeconds;
+    private int nanoOfSecond;
     private long nanoTime;
     private short parameterCount;
     private boolean includeLocation;
@@ -96,10 +100,11 @@ public class RingBufferLogEvent implements LogEvent, ReusableMessage, CharSequen
             final String theFqcn, final Level aLevel, final Message msg, final Throwable aThrowable,
             final StringMap mutableContextData, final ContextStack aContextStack, final long threadId,
             final String threadName, final int threadPriority, final StackTraceElement aLocation,
-            final long aCurrentTimeMillis, final long aNanoTime) {
+            final long timeSeconds, final int nanoOfSecond, final long aNanoTime) {
         this.threadPriority = threadPriority;
         this.threadId = threadId;
-        this.currentTimeMillis = aCurrentTimeMillis;
+        this.timeSeconds = timeSeconds;
+        this.nanoOfSecond = nanoOfSecond;
         this.nanoTime = aNanoTime;
         this.level = aLevel;
         this.threadName = threadName;
@@ -377,7 +382,21 @@ public class RingBufferLogEvent implements LogEvent, ReusableMessage, CharSequen
 
     @Override
     public long getTimeMillis() {
-        return message instanceof TimestampMessage ? ((TimestampMessage) message).getTimestamp() :currentTimeMillis;
+        if(message instanceof TimestampMessage){
+            return ((TimestampMessage) message).getTimestamp();  
+        }
+        return 1000 * timeSeconds + nanoOfSecond / NANOS_PER_MILLI;
+    }
+    
+    public long getTimeSeconds() {
+        return message instanceof TimestampMessage ? ((TimestampMessage) message).getTimestamp() / 1000 : timeSeconds;
+    }
+
+    public int getNanoOfSecond() {
+        if(message instanceof TimestampMessage){
+            return (NANOS_PER_MILLI * (int)((TimestampMessage) message).getTimestamp() % 1000);
+        }
+        return nanoOfSecond;
     }
 
     @Override
@@ -453,7 +472,8 @@ public class RingBufferLogEvent implements LogEvent, ReusableMessage, CharSequen
                 .setThreadPriority(threadPriority) //
                 .setThrown(getThrown()) // may deserialize from thrownProxy
                 .setThrownProxy(thrownProxy) // avoid unnecessarily creating thrownProxy
-                .setTimeMillis(currentTimeMillis);
+                .setTimeSeconds(timeSeconds)
+                .setNanoOfSecond(nanoOfSecond);
     }
 
 }

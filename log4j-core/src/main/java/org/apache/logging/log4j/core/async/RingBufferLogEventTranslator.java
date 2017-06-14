@@ -48,7 +48,8 @@ public class RingBufferLogEventTranslator implements
     private String threadName = Thread.currentThread().getName();
     private int threadPriority = Thread.currentThread().getPriority();
     private StackTraceElement location;
-    private long currentTimeMillis;
+    private long timeSeconds;
+    private int nanoOfSeconds;
     private long nanoTime;
 
     // @Override
@@ -59,7 +60,7 @@ public class RingBufferLogEventTranslator implements
                 // config properties are taken care of in the EventHandler thread
                 // in the AsyncLogger#actualAsyncLog method
                 injector.injectContextData(null, (StringMap) event.getContextData()), contextStack,
-                threadId, threadName, threadPriority, location, currentTimeMillis, nanoTime);
+                threadId, threadName, threadPriority, location, timeSeconds, nanoOfSeconds, nanoTime);
 
         clear(); // clear the translator
     }
@@ -77,7 +78,8 @@ public class RingBufferLogEventTranslator implements
                 null, // t
                 null, // contextStack
                 null, // location
-                0, // currentTimeMillis
+                0, // timeSeconds
+                0, // nanoOfSecond
                 0 // nanoTime
         );
     }
@@ -85,7 +87,7 @@ public class RingBufferLogEventTranslator implements
     public void setBasicValues(final AsyncLogger anAsyncLogger, final String aLoggerName, final Marker aMarker,
             final String theFqcn, final Level aLevel, final Message msg, final Throwable aThrowable,
             final ContextStack aContextStack, final StackTraceElement aLocation,
-            final long aCurrentTimeMillis, final long aNanoTime) {
+            final long timeSeconds, final int nanoOfSecond, final long aNanoTime) {
         this.asyncLogger = anAsyncLogger;
         this.loggerName = aLoggerName;
         this.marker = aMarker;
@@ -95,7 +97,8 @@ public class RingBufferLogEventTranslator implements
         this.thrown = aThrowable;
         this.contextStack = aContextStack;
         this.location = aLocation;
-        this.currentTimeMillis = aCurrentTimeMillis;
+        this.timeSeconds = timeSeconds;
+        this.nanoOfSeconds = nanoOfSecond;
         this.nanoTime = aNanoTime;
     }
 

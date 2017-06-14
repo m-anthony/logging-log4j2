@@ -134,6 +134,18 @@ public class TestBaseEntity extends AbstractLogEventWrapperEntity {
     public long getTimeMillis() {
         return this.getWrappedEvent().getTimeMillis();
     }
+    
+    @Override
+    @Transient
+    public long getTimeSeconds() {
+        return this.getWrappedEvent().getTimeSeconds();
+    }
+    
+    @Override
+    @Transient
+    public int getNanoOfSecond() {
+        return this.getWrappedEvent().getNanoOfSecond();
+    }
 
     @Override
     @Transient

@@ -66,6 +66,11 @@ abstract class JacksonFactory {
         }
 
         @Override
+        protected String getPropertNameForTimeMillis() {
+            return JsonConstants.ELT_TIME_MILLIS;
+        }
+        
+        @Override
         protected PrettyPrinter newCompactPrinter() {
             return new MinimalPrettyPrinter();
         }
@@ -104,6 +109,11 @@ abstract class JacksonFactory {
         @Override
         protected String getPropertNameForNanoTime() {
             return JsonConstants.ELT_NANO_TIME;
+        }
+        
+        @Override
+        protected String getPropertNameForTimeMillis() {
+            return JsonConstants.ELT_TIME_MILLIS;
         }
 
         @Override
@@ -144,6 +154,11 @@ abstract class JacksonFactory {
         @Override
         protected String getPropertNameForNanoTime() {
             return JsonConstants.ELT_NANO_TIME;
+        }
+
+        @Override
+        protected String getPropertNameForTimeMillis() {
+            return JsonConstants.ELT_TIME_MILLIS;
         }
 
         @Override
@@ -199,6 +214,8 @@ abstract class JacksonFactory {
     abstract protected String getPropertNameForContextMap();
 
     abstract protected String getPropertNameForSource();
+    
+    abstract protected String getPropertNameForTimeMillis();
 
     abstract protected String getPropertNameForNanoTime();
 
@@ -217,10 +234,12 @@ abstract class JacksonFactory {
         if (!properties) {
             except.add(this.getPropertNameForContextMap());
         }
+        except.add(this.getPropertNameForTimeMillis());
         except.add(this.getPropertNameForNanoTime());
         filters.addFilter(Log4jLogEvent.class.getName(), SimpleBeanPropertyFilter.serializeAllExcept(except));
         final ObjectWriter writer = this.newObjectMapper().writer(compact ? this.newCompactPrinter() : this.newPrettyPrinter());
         return writer.with(filters);
     }
+
 
 }

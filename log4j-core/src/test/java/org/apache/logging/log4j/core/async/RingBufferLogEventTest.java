@@ -33,6 +33,7 @@ import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.appender.db.jpa.TestBaseEntity;
 import org.apache.logging.log4j.util.StringMap;
 import org.apache.logging.log4j.core.impl.ThrowableProxy;
+import org.apache.logging.log4j.core.util.PreciseClock;
 import org.apache.logging.log4j.message.Message;
 import org.apache.logging.log4j.message.SimpleMessage;
 import org.apache.logging.log4j.spi.MutableThreadContextStack;
@@ -40,6 +41,7 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import static org.apache.logging.log4j.core.util.PreciseClock.NANOS_PER_MILLI;
 import static org.junit.Assert.*;
 
 /**
@@ -66,10 +68,11 @@ public class RingBufferLogEventTest {
         final ContextStack contextStack = null;
         final String threadName = null;
         final StackTraceElement location = null;
-        final long currentTimeMillis = 0;
+        final long timeSeconds = 0;
+        final int nanoOfSecond = 0;
         final long nanoTime = 1;
         evt.setValues(null, loggerName, marker, fqcn, level, data, t, (StringMap) evt.getContextData(),
-                contextStack, -1, threadName, -1, location, currentTimeMillis, nanoTime);
+                contextStack, -1, threadName, -1, location, timeSeconds, nanoOfSecond, nanoTime);
         assertEquals(Level.OFF, evt.getLevel());
     }
 
@@ -85,10 +88,11 @@ public class RingBufferLogEventTest {
         final ContextStack contextStack = null;
         final String threadName = null;
         final StackTraceElement location = null;
-        final long currentTimeMillis = 0;
+        final long timeSeconds = 0;
+        final int nanoOfSecond = 0;
         final long nanoTime = 1;
         evt.setValues(null, loggerName, marker, fqcn, level, data, t, (StringMap) evt.getContextData(),
-                contextStack, -1, threadName, -1, location, currentTimeMillis, nanoTime);
+                contextStack, -1, threadName, -1, location, timeSeconds, nanoOfSecond, nanoTime);
         assertNotNull(evt.getMessage());
     }
 
@@ -104,10 +108,11 @@ public class RingBufferLogEventTest {
         final ContextStack contextStack = null;
         final String threadName = null;
         final StackTraceElement location = null;
-        final long currentTimeMillis = 123;
+        final long timeSeconds = 0;
+        final int nanoOfSecond = 123 * NANOS_PER_MILLI;
         final long nanoTime = 1;
         evt.setValues(null, loggerName, marker, fqcn, level, data, t, (StringMap) evt.getContextData(),
-                contextStack, -1, threadName, -1, location, currentTimeMillis, nanoTime);
+                contextStack, -1, threadName, -1, location, timeSeconds, nanoOfSecond, nanoTime);
         assertEquals(123, evt.getTimeMillis());
     }
 
@@ -124,9 +129,11 @@ public class RingBufferLogEventTest {
         final String threadName = "main";
         final StackTraceElement location = null;
         final long currentTimeMillis = 12345;
+        final long timeSeconds = currentTimeMillis / 1000;
+        final int nanoOfSecond = (int) (currentTimeMillis % 1000) * NANOS_PER_MILLI;
         final long nanoTime = 1;
         evt.setValues(null, loggerName, marker, fqcn, level, data, t, (StringMap) evt.getContextData(),
-                contextStack, -1, threadName, -1, location, currentTimeMillis, nanoTime);
+                contextStack, -1, threadName, -1, location, timeSeconds, nanoOfSecond, nanoTime);
         ((StringMap) evt.getContextData()).putValue("key", "value");
 
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -163,9 +170,11 @@ public class RingBufferLogEventTest {
         final String threadName = "main";
         final StackTraceElement location = null;
         final long currentTimeMillis = 12345;
+        final long timeSeconds = currentTimeMillis / 1000;
+        final int nanoOfSecond = (int) (currentTimeMillis % 1000) * NANOS_PER_MILLI;
         final long nanoTime = 1;
         evt.setValues(null, loggerName, marker, fqcn, level, data, t, (StringMap) evt.getContextData(),
-                contextStack, -1, threadName, -1, location, currentTimeMillis, nanoTime);
+                contextStack, -1, threadName, -1, location, timeSeconds, nanoOfSecond, nanoTime);
         ((StringMap) evt.getContextData()).putValue("key", "value");
 
         final LogEvent actual = evt.createMemento();
